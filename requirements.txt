@@ -1,0 +1,14 @@
+# Runtime dependencies. Pinned exact — see docs/DECISIONS.md for why each was chosen.
+
+# Qt 6 bindings. LGPL, unlike PyQt6's GPL. Do not swap without reading D1.
+PySide6==6.11.1
+
+# Screen capture via GDI BitBlt. Returns a raw BGRA buffer. See D3.
+mss==10.2.0
+
+# Image encoding and the pixel operations Qt makes awkward.
+pillow==12.3.0
+
+# Zero-copy view over the mss buffer on its way into QImage.
+# Held at 2.4.x: numpy 2.5+ requires Python 3.12, and this project's floor is 3.11.
+numpy==2.4.6

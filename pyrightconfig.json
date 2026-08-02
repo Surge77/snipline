@@ -1,0 +1,13 @@
+{
+  "include": ["src", "tests"],
+  "exclude": ["**/__pycache__", ".venv", "build", "dist"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.11",
+  "pythonPlatform": "Windows",
+  "reportMissingTypeStubs": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownArgumentType": false
+}

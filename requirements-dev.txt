@@ -1,0 +1,13 @@
+# Development dependencies. Pinned exact.
+
+-r requirements.txt
+
+pytest==9.1.1
+pytest-qt==4.5.0
+pytest-cov==7.1.0
+
+pyright==1.1.411
+ruff==0.16.1
+
+# Packaging. --onedir only; see D10.
+pyinstaller==6.21.0

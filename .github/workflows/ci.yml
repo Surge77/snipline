@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    # Windows-hosted because the project targets Windows, even though the test suite
+    # itself is headless and platform-independent by design.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # A .venv at the repo root is what pyrightconfig.json points at, so CI builds one
+      # rather than installing into the runner's global interpreter.
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          .venv\Scripts\python -m pip install --upgrade pip
+          .venv\Scripts\python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint
+        run: .venv\Scripts\python -m ruff check .
+
+      - name: Type gate
+        run: .venv\Scripts\python -m pyright
+
+      - name: Tests
+        # Qt runs offscreen; no test touches the real screen. See D9.
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: .venv\Scripts\python -m pytest --cov --cov-report=term-missing
