@@ -108,3 +108,14 @@ Run on each of the configurations `C1`–`C5` defined in `BENCHMARKS.md`.
 - [ ] A 4K capture saved from the editor is 4K in the file — not the size of the window it
       was displayed in.
 - [ ] Closing the editor with unsaved annotations does not crash or leave a stray window.
+
+## Tools and redaction (M5)
+
+- [ ] Every tool in the toolbar draws, and each annotation undoes with one Ctrl+Z.
+- [ ] Colour and width changes affect the *next* annotation, not ones already drawn.
+- [ ] Text tool accepts IME composition (Japanese/Chinese input) and emoji.
+- [ ] A solid or pixelate redaction dragged across the image re-processes the area it now
+      covers — inspect the vacated area, which must show the original capture again.
+- [ ] Open an exported file in an image editor and confirm no recoverable pixels remain
+      beneath a solid or pixelate redaction.
+- [ ] Blur is labelled as a cosmetic effect everywhere it appears, never as redaction (D7).
