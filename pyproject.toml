@@ -34,6 +34,11 @@ Issues = "https://github.com/Surge77/snipline/issues"
 [project.gui-scripts]
 snipline = "snipline.app:main"
 
+# A console script, not a GUI one: this tool prints to stdout and is meant to be run from a
+# terminal to diagnose capture geometry without any UI in the way.
+[project.scripts]
+snipline-grab = "snipline.tools.grab:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
