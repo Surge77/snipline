@@ -62,12 +62,12 @@ class RegionCapture(QObject):
             return False
 
         try:
-            frozen = self._service.grab_desktop()
+            frozen, monitors = self._service.grab_desktop_with_monitors()
         except (RuntimeError, ValueError, OSError) as error:
             self._flow.report_failure(str(error))
             return False
 
-        controller = OverlayController(frozen=frozen, monitors=self._service.monitors())
+        controller = OverlayController(frozen=frozen, monitors=monitors)
         controller.selected.connect(self._on_selected)
         controller.cancelled.connect(self._on_cancelled)
         self._controller = controller

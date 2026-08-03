@@ -146,3 +146,25 @@ def test_close_releases_the_backend(backend: FakeBackend) -> None:
     service.close()
 
     assert backend.closed
+
+
+def test_freezing_the_desktop_reads_the_monitor_layout_once(
+    backend: FakeBackend, layout: list[MonitorInfo]
+) -> None:
+    # Two enumerations per capture put a second EnumDisplayMonitors walk on the span the
+    # benchmark measures, and let the frame and the layout it is sliced against disagree if
+    # a display changes in between.
+    calls = 0
+
+    def counting_provider() -> list[MonitorInfo]:
+        nonlocal calls
+        calls += 1
+        return layout
+
+    service = CaptureService(backend=backend, monitors_provider=counting_provider)
+
+    frame, monitors = service.grab_desktop_with_monitors()
+
+    assert calls == 1
+    assert list(monitors) == layout
+    assert frame.rect == service.desktop_rect()

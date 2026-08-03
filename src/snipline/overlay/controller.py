@@ -49,7 +49,11 @@ class OverlayController(QObject):
 
     def build_windows(self) -> list[OverlayWindow]:
         """Create one window per screen. Separated from ``show`` so it is inspectable."""
-        desktop_pixmap = QPixmap.fromImage(frame_to_qimage(self._frozen))
+        # A view rather than a copy, sliced per monitor below. Copying the whole desktop
+        # here and again into a pixmap would move the full framebuffer twice more on the
+        # hotkey-to-overlay path, for pixels that are then thrown away. Safe because
+        # ``self._frozen`` outlives every slice taken from it.
+        desktop = frame_to_qimage(self._frozen, copy=False)
 
         windows: list[OverlayWindow] = []
         for monitor in self._monitors:
@@ -63,8 +67,10 @@ class OverlayController(QObject):
             window = OverlayWindow(
                 screen=screen,
                 monitor=monitor,
-                frozen=desktop_pixmap.copy(
-                    slice_rect.left, slice_rect.top, slice_rect.width, slice_rect.height
+                frozen=QPixmap.fromImage(
+                    desktop.copy(
+                        slice_rect.left, slice_rect.top, slice_rect.width, slice_rect.height
+                    )
                 ),
                 model=self._model,
             )
@@ -94,9 +100,10 @@ class OverlayController(QObject):
 
     def _repaint_all(self) -> None:
         # Every window repaints on any change: a selection spanning two screens must not
-        # leave half of itself undrawn on the screen the mouse is not on.
+        # leave half of itself undrawn on the screen the mouse is not on. Each window
+        # narrows the invalidation to the region its own selection touched.
         for window in self._windows:
-            window.update()
+            window.refresh()
 
     def commit(self) -> None:
         """Accept the current selection, close the overlay, and report the result.

@@ -22,6 +22,7 @@ from PySide6.QtGui import (
     QMouseEvent,
     QPainter,
     QPaintEvent,
+    QPen,
     QPixmap,
     QScreen,
 )
@@ -39,6 +40,15 @@ _BORDER_WIDTH = 2
 _LABEL_MARGIN = 8
 _LABEL_PADDING = 6
 _LABEL_BACKGROUND = QColor(17, 24, 39, 220)
+
+# Slack allowed when matching a Qt screen to a Win32 monitor by origin. Wide enough to
+# absorb the rounding in Qt's logical-to-physical reconstruction, far narrower than the
+# hundreds of pixels separating any two real monitors.
+_ORIGIN_TOLERANCE_PX = 4
+
+# How far the chrome -- border and the size label sitting above the selection -- extends
+# beyond the selection itself. Used to widen partial repaints so none of it is left stale.
+_CHROME_MARGIN = 64
 
 _NUDGE_STEP_PX = 1
 _ARROW_EDGES = {
@@ -77,6 +87,29 @@ class OverlayWindow(QWidget):
         self.setMouseTracking(True)
         self.setScreen(screen)
         self.setGeometry(screen.geometry())
+        self._painted: QRect | None = None
+
+    def refresh(self) -> None:
+        """Repaint only what the selection change can have altered.
+
+        A full-screen invalidation per mouse-move event costs a whole 4K blit on every
+        screen, which is what makes a rubber-band drag feel heavy. The area that can change
+        is the old selection, the new one, and the chrome drawn around them.
+        """
+        current = self._local_selection()
+        previous = self._painted
+        self._painted = current
+
+        if current is None or previous is None:
+            self.update()  # appearing or clearing re-dims the whole screen
+            return
+
+        changed = current.united(previous)
+        self.update(
+            changed.adjusted(
+                -_CHROME_MARGIN, -_CHROME_MARGIN, _CHROME_MARGIN, _CHROME_MARGIN
+            )
+        )
 
     def show_on_screen(self) -> None:
         self.showFullScreen()
@@ -97,28 +130,40 @@ class OverlayWindow(QWidget):
 
         # Dim everything except the selection, so the selected region shows the true
         # colours the user is about to capture.
-        for band in self._surrounding_bands(selection):
+        for band in self.surrounding_bands(selection):
             painter.fillRect(band, _DIM)
 
-        painter.setPen(_BORDER)
-        painter.drawRect(selection.adjusted(0, 0, -_BORDER_WIDTH, -_BORDER_WIDTH))
+        # Outside the selection, never on it: a border drawn over the edge hides the very
+        # pixels the user is lining the selection up against.
+        painter.setPen(QPen(_BORDER, _BORDER_WIDTH))
+        painter.drawRect(selection.adjusted(-_BORDER_WIDTH, -_BORDER_WIDTH, 0, 0))
         self._draw_size_label(painter, selection)
         painter.end()
 
-    def _surrounding_bands(self, selection: QRect) -> list[QRect]:
+    def surrounding_bands(self, selection: QRect) -> list[QRect]:
+        """The four dim bands around the selection.
+
+        Public so the tiling can be asserted directly; painting it is the only way it would
+        otherwise be observable, and the overlay only renders on a real screen.
+
+        ``QRect.right()`` and ``bottom()`` are the last contained row and column, not one
+        past them, so the bands start one pixel further out. Off by one here dims the
+        selection's own edge -- a visible lie about what is being captured, in the one
+        place this project claims to be pixel-exact.
+        """
         full = self.rect()
         band_height = selection.height()
         return [
             QRect(full.left(), full.top(), full.width(), selection.top() - full.top()),
             QRect(
                 full.left(),
-                selection.bottom(),
+                selection.bottom() + 1,
                 full.width(),
                 full.bottom() - selection.bottom(),
             ),
             QRect(full.left(), selection.top(), selection.left() - full.left(), band_height),
             QRect(
-                selection.right(),
+                selection.right() + 1,
                 selection.top(),
                 full.right() - selection.right(),
                 band_height,
@@ -207,11 +252,22 @@ def screen_for(monitor: MonitorInfo) -> QScreen | None:
 
     Matched on position rather than index: Qt's screen order and the Win32 enumeration
     order are independently defined and do not have to agree.
+
+    The match is nearest-origin rather than exact. Qt reports logical geometry, so
+    reconstructing a physical origin from it rounds, and on a mixed-DPI desktop the rounding
+    error accumulates across screens. Demanding an exact hit means one stray pixel drops the
+    screen from the overlay -- and if it happens on every screen, the hotkey silently does
+    nothing, which is this application's worst failure mode.
     """
+    best: QScreen | None = None
+    best_distance = _ORIGIN_TOLERANCE_PX
     for screen in QGuiApplication.screens():
         geometry = screen.geometry()
         ratio = screen.devicePixelRatio()
-        origin = (round(geometry.left() * ratio), round(geometry.top() * ratio))
-        if origin == (monitor.bounds.left, monitor.bounds.top):
-            return screen
-    return None
+        distance = max(
+            abs(round(geometry.left() * ratio) - monitor.bounds.left),
+            abs(round(geometry.top() * ratio) - monitor.bounds.top),
+        )
+        if distance < best_distance:
+            best, best_distance = screen, distance
+    return best

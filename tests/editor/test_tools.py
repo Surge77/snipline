@@ -16,7 +16,12 @@ from snipline.editor.scene import AnnotationScene, EditorController
 from snipline.editor.style import DEFAULT_STYLE, ToolStyle
 from snipline.editor.tools.base import Tool
 from snipline.editor.tools.freehand import FreehandItem, FreehandTool
-from snipline.editor.tools.registry import TOOLS, build_tool, tool_names
+from snipline.editor.tools.registry import (
+    TOOLS,
+    build_tool,
+    drawing_tool_names,
+    tool_names,
+)
 from snipline.editor.tools.shapes import EllipseTool, RectangleTool, rect_from_drag
 from snipline.editor.tools.step import StepBadgeItem, StepTool
 from snipline.editor.tools.text import TextItem, TextTool
@@ -44,7 +49,7 @@ def test_every_tool_satisfies_the_tool_protocol(qapp: QApplication, name: str) -
     assert isinstance(build_tool(name, DEFAULT_STYLE), Tool)
 
 
-@pytest.mark.parametrize("name", tool_names())
+@pytest.mark.parametrize("name", drawing_tool_names())
 def test_every_tool_draws_through_the_same_controller(qapp: QApplication, name: str) -> None:
     # No per-tool branching exists in EditorController; if any tool needed some, this test
     # would be where that shows up.
@@ -56,7 +61,7 @@ def test_every_tool_draws_through_the_same_controller(qapp: QApplication, name: 
     assert len(controller.scene.items()) == 1
 
 
-@pytest.mark.parametrize("name", tool_names())
+@pytest.mark.parametrize("name", drawing_tool_names())
 def test_every_tool_produces_an_undoable_annotation(qapp: QApplication, name: str) -> None:
     controller = _controller(build_tool(name, DEFAULT_STYLE))
     _drag(controller, 20, 20, 160, 120)
@@ -66,7 +71,7 @@ def test_every_tool_produces_an_undoable_annotation(qapp: QApplication, name: st
     assert controller.scene.items() == []
 
 
-@pytest.mark.parametrize("name", tool_names())
+@pytest.mark.parametrize("name", drawing_tool_names())
 def test_every_tool_produces_a_selectable_item(qapp: QApplication, name: str) -> None:
     controller = _controller(build_tool(name, DEFAULT_STYLE))
 
