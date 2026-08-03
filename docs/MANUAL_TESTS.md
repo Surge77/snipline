@@ -6,6 +6,27 @@ tagging any release. Record pass/fail and the machine configuration.
 Writing mock-heavy tests for these — asserting that `ctypes` was called with certain arguments —
 would break on every refactor and catch nothing. Hence a checklist.
 
+## Capture path (M1)
+
+Everything here runs through `snipline-grab`, which has no UI. When a capture looks wrong
+anywhere else in the app, run these first: they say whether the bug is in M1 or in something
+built on top of it.
+
+- [ ] `snipline-grab --list` reports every connected monitor with correct physical bounds and
+      scale percentages, matching Windows' own Display settings.
+- [ ] On a scaled monitor, the reported size is the **physical** panel resolution, not the
+      virtualised logical one — a 1920×1080 panel at 125% must report 1920×1080, not
+      1536×864. A wrong number here means DPI awareness was declared too late.
+- [ ] `snipline-grab --all` writes a PNG whose dimensions equal the virtual desktop, with each
+      monitor's content in the right place and no black bands between them.
+- [ ] `snipline-grab --monitor N` writes exactly that panel, for every N.
+- [ ] `snipline-grab --region L,T,W,H` on a monitor with a **negative** origin crops the
+      intended area rather than one offset by a whole monitor.
+- [ ] The written image is real screen content, not blank or fully transparent (the GDI
+      zero-alpha trap).
+- [ ] An off-desktop region and an unknown monitor index both fail with a one-line message and
+      exit code 1 — no traceback.
+
 ## Hotkey
 
 - [ ] Hotkey fires while a full-screen application has focus.
