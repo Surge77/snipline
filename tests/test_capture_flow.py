@@ -15,7 +15,7 @@ from PIL import Image
 from snipline.capture.fake_backend import FakeBackend
 from snipline.capture.service import CaptureService
 from snipline.capture_flow import CaptureFlow, build_filename, default_save_directory
-from snipline.config import ExportFormat, Settings
+from snipline.config import DefaultSink, ExportFormat, Settings
 from snipline.platform.geometry import MonitorInfo, PhysicalRect
 
 FIXED_MOMENT = datetime(2026, 8, 3, 14, 30, 5)
@@ -168,6 +168,49 @@ def test_works_without_a_reporter(tmp_path: Path, backend: FakeBackend) -> None:
     )
 
     assert flow.capture_desktop().succeeded
+
+
+def test_deliver_puts_the_frame_on_the_clipboard_by_default(
+    tmp_path: Path, reporter: SpyReporter, backend: FakeBackend, qapp: object
+) -> None:
+    from PySide6.QtWidgets import QApplication
+
+    frame = backend.grab(PhysicalRect(100, 50, 32, 16))
+
+    outcome = _flow(tmp_path, reporter, backend).deliver(frame)
+
+    assert outcome.succeeded
+    assert outcome.path is None  # clipboard, so nothing was written to disk
+    assert reporter.last_title == "Copied to clipboard"
+    pasted = QApplication.clipboard().image()
+    assert (pasted.width(), pasted.height()) == (32, 16)
+
+
+def test_deliver_writes_a_file_when_the_sink_is_file(
+    tmp_path: Path, reporter: SpyReporter, backend: FakeBackend
+) -> None:
+    settings = Settings(save_directory=tmp_path, default_sink=DefaultSink.FILE)
+    frame = backend.grab(PhysicalRect(0, 0, 64, 48))
+
+    outcome = _flow(tmp_path, reporter, backend, settings).deliver(frame)
+
+    assert outcome.path is not None
+    with Image.open(outcome.path) as written:
+        assert written.size == (64, 48)
+
+
+def test_deliver_reports_a_failure_rather_than_raising(
+    tmp_path: Path, reporter: SpyReporter, backend: FakeBackend
+) -> None:
+    blocked = tmp_path / "blocked"
+    blocked.write_text("not a directory")
+    settings = Settings(save_directory=blocked, default_sink=DefaultSink.FILE)
+    frame = backend.grab(PhysicalRect(0, 0, 8, 8))
+
+    outcome = _flow(tmp_path, reporter, backend, settings).deliver(frame)
+
+    assert not outcome.succeeded
+    assert reporter.last_title == "Capture failed"
 
 
 def test_default_save_directory_is_under_pictures() -> None:

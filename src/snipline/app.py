@@ -4,8 +4,8 @@ The ordering constraint in ``main`` is load-bearing: DPI awareness must be decla
 ``QApplication`` exists. Qt queries screen geometry during construction, and a process that
 is not yet DPI-aware receives virtualised numbers that stay wrong for the rest of its life.
 
-Selection overlay arrives in M3. Until then the hotkey captures the whole desktop, which is
-the click-free fallback path that survives into v1 anyway.
+The hotkey opens the selection overlay. Capturing the whole desktop remains available
+through ``CaptureFlow`` and is the fallback when no overlay can be shown.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from snipline.config import Settings
 from snipline.platform.dpi import declare_dpi_awareness
 from snipline.platform.hotkey import GlobalHotkey, HotkeyError
 from snipline.platform.keys import parse_hotkey
+from snipline.region_capture import RegionCapture
 from snipline.single_instance import SingleInstance
 from snipline.tray import Tray
 
@@ -48,23 +49,37 @@ def build_application(argv: list[str]) -> QApplication:
 
 
 def wire(
-    app: QApplication, flow: CaptureFlow, tray: Tray, instance: SingleInstance
+    app: QApplication,
+    flow: CaptureFlow,
+    tray: Tray,
+    instance: SingleInstance,
+    region: RegionCapture | None = None,
 ) -> GlobalHotkey:
-    """Connect the tray, the second-launch channel, and the hotkey to the capture flow.
+    """Connect the tray, the second-launch channel, and the hotkey to a capture.
+
+    With a ``RegionCapture`` the hotkey opens the selection overlay. Without one it falls
+    back to capturing the whole desktop -- what M2 did, and still the behaviour when no
+    overlay can be shown.
 
     Returns the hotkey so the caller can register it and decide how to report failure.
     """
-    tray.capture_requested.connect(flow.capture_desktop)
-    def on_second_launch(_payload: bytes) -> None:
-        flow.capture_desktop()
+    start_capture = region.start if region is not None else flow.capture_desktop
 
+    def on_second_launch(_payload: bytes) -> None:
+        start_capture()
+
+    tray.capture_requested.connect(start_capture)
     instance.command_received.connect(on_second_launch)
 
     hotkey = GlobalHotkey(parent=app)
     app.installNativeEventFilter(hotkey)
-    hotkey.triggered.connect(flow.capture_desktop)
+    hotkey.triggered.connect(start_capture)
 
     def shutdown() -> None:
+        # Before anything else: an overlay outliving the app leaves a frozen, unclickable
+        # image covering the screen, with no tray icon left to quit from.
+        if region is not None:
+            region.abort()
         hotkey.unregister()
         instance.close()
         tray.hide()
@@ -91,13 +106,11 @@ def main() -> int:
 
     settings = Settings()
     tray = Tray(APP_NAME)
-    flow = CaptureFlow(
-        service=CaptureService(backend=MssBackend()),
-        settings=settings,
-        reporter=tray.notify,
-    )
+    service = CaptureService(backend=MssBackend())
+    flow = CaptureFlow(service=service, settings=settings, reporter=tray.notify)
+    region = RegionCapture(service=service, flow=flow, parent=app)
 
-    hotkey = wire(app, flow, tray, instance)
+    hotkey = wire(app, flow, tray, instance, region)
     try:
         hotkey.register(parse_hotkey(settings.hotkey))
     except (HotkeyError, ValueError) as error:
@@ -106,7 +119,7 @@ def main() -> int:
         tray.notify("Hotkey unavailable", str(error), is_error=True)
 
     tray.show()
-    tray.notify(APP_NAME, f"Ready. Press {settings.hotkey} to capture.")
+    tray.notify(APP_NAME, f"Ready. Press {settings.hotkey} to select a region.")
     return app.exec()
 
 

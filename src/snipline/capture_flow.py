@@ -14,8 +14,10 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
+from snipline.capture.frame import Frame
 from snipline.capture.service import CaptureService
-from snipline.config import ExportFormat, Settings
+from snipline.config import DefaultSink, ExportFormat, Settings
+from snipline.export.clipboard import copy_to_clipboard
 from snipline.export.encode import save_frame
 
 __all__ = ["CaptureFlow", "CaptureOutcome", "build_filename", "default_save_directory"]
@@ -97,16 +99,7 @@ class CaptureFlow:
         """
         try:
             frame = self._service.grab_desktop()
-            directory = self._settings.save_directory or default_save_directory()
-            destination = _unique(
-                directory / build_filename(self._clock(), self._settings.export_format)
-            )
-            written = save_frame(
-                frame,
-                destination,
-                export_format=self._settings.export_format,
-                quality=self._settings.jpeg_quality,
-            )
+            written = self._write(frame)
         except (OSError, ValueError, RuntimeError) as error:
             outcome = CaptureOutcome(error=str(error))
             self._report("Capture failed", str(error), is_error=True)
@@ -114,6 +107,46 @@ class CaptureFlow:
 
         self._report("Capture saved", str(written), is_error=False)
         return CaptureOutcome(path=written)
+
+    def deliver(self, frame: Frame) -> CaptureOutcome:
+        """Send an already-captured frame to the configured destination.
+
+        The overlay path lands here with a frame cropped out of the frozen desktop, so no
+        second capture is taken and the pixels stay the ones from before the overlay
+        appeared (D5).
+        """
+        try:
+            if self._settings.default_sink is DefaultSink.CLIPBOARD:
+                if not copy_to_clipboard(frame):
+                    raise RuntimeError("no clipboard is available")
+                size = f"{frame.width} x {frame.height}"
+                self._report("Copied to clipboard", size, is_error=False)
+                return CaptureOutcome()
+
+            written = self._write(frame)
+        except (OSError, ValueError, RuntimeError) as error:
+            self._report("Capture failed", str(error), is_error=True)
+            return CaptureOutcome(error=str(error))
+
+        self._report("Capture saved", str(written), is_error=False)
+        return CaptureOutcome(path=written)
+
+    def _write(self, frame: Frame) -> Path:
+        directory = self._settings.save_directory or default_save_directory()
+        destination = _unique(
+            directory / build_filename(self._clock(), self._settings.export_format)
+        )
+        return save_frame(
+            frame,
+            destination,
+            export_format=self._settings.export_format,
+            quality=self._settings.jpeg_quality,
+        )
+
+    def report_failure(self, message: str) -> CaptureOutcome:
+        """Report a failure raised before there was anything to deliver."""
+        self._report("Capture failed", message, is_error=True)
+        return CaptureOutcome(error=message)
 
     def _report(self, title: str, message: str, *, is_error: bool) -> None:
         if self._reporter is not None:
