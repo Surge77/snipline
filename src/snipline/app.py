@@ -12,17 +12,18 @@ from __future__ import annotations
 
 import sys
 
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
 from snipline.capture.frame import Frame
 from snipline.capture.service import CaptureService
 from snipline.capture_flow import CaptureFlow
-from snipline.config import Settings
 from snipline.editor_session import EditorSession
 from snipline.platform.dpi import declare_dpi_awareness
 from snipline.platform.hotkey import GlobalHotkey, HotkeyError
 from snipline.platform.keys import parse_hotkey
 from snipline.region_capture import RegionCapture
+from snipline.settings_store import SettingsStore
 from snipline.single_instance import SingleInstance
 from snipline.tray import Tray
 
@@ -106,7 +107,10 @@ def main() -> int:
 
     from snipline.capture.mss_backend import MssBackend
 
-    settings = Settings()
+    # Persisted settings, not defaults: a rebound hotkey or a chosen save directory has to
+    # survive a restart or the setting is decorative.
+    store = SettingsStore(QSettings(ORG_NAME, APP_NAME))
+    settings = store.load()
     tray = Tray(APP_NAME)
     service = CaptureService(backend=MssBackend())
     flow = CaptureFlow(service=service, settings=settings, reporter=tray.notify)

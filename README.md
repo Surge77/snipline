@@ -20,19 +20,26 @@ sense that most of them get multi-monitor DPI wrong. This project takes the posi
 interesting engineering is not the drawing tools — it's the coordinate math at the OS boundary,
 and proving it works with numbers rather than screenshots of screenshots.
 
-## Target numbers
+## Measured numbers
 
-These are the acceptance criteria for v1. The README will state measured p50/p95 values here once
-the benchmark harness lands (see [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md)).
+Measured on a **single 1920×1080 display at 125% scaling** (Windows 10 build 26200, Python 3.11,
+PySide6 6.11.1), 40 samples per span after 3 warm-up runs, machine otherwise idle. Reproduce with
+`python -m snipline.tools.benchmark`.
 
-| Span | Target (p95) | Measured |
-|---|---|---|
-| hotkey press → overlay visible | < 120 ms | _pending_ |
-| region release → editor ready | < 80 ms | _pending_ |
-| export → clipboard populated | < 60 ms | _pending_ |
-| monitors handled at mixed DPI | 3 @ 100/125/150% | _pending_ |
+| Span | Target (p95) | Measured p50 | Measured p95 |
+|---|---|---|---|
+| hotkey press → overlay visible | < 120 ms | 34.8 ms | **43.9 ms** |
+| region release → editor ready | < 80 ms | 14.7 ms | **23.3 ms** |
+| export → clipboard populated | < 60 ms | 3.1 ms | **7.0 ms** |
+| monitors handled at mixed DPI | 3 @ 100/125/150% | _not measured_ | _not measured_ |
 
 The first row is the one users feel. Everything else is comfort.
+
+**The last row is not measured, and that matters.** The development machine has one display, so
+these timings come from the easiest possible configuration. The multi-monitor mixed-DPI geometry
+is covered by unit tests against synthetic layouts including negative-origin monitors — what is
+missing is *timing* on real multi-monitor hardware, not correctness coverage. See
+[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) for the full table and the caveats behind it.
 
 ## Planned features (v1)
 
@@ -93,3 +100,24 @@ MIT. See [LICENSE](LICENSE).
 PySide6 is LGPL and is used as a dynamically linked dependency, which is what keeps this project
 free to relicence or ship as a binary. Do not swap it for PyQt6 without reading
 [`docs/DECISIONS.md`](docs/DECISIONS.md) first.
+
+## Building
+
+```sh
+pip install -r requirements.txt -r requirements-dev.txt
+pip install -e .
+pyinstaller snipline.spec
+```
+
+Produces `dist/Snipline/Snipline.exe` (~159 MB unpacked). The build is `--onedir` on purpose:
+`--onefile` unpacks to a temp directory on every launch, which adds seconds of startup to a tool
+whose whole point is responding instantly (D10). UPX compression is off because packed binaries
+are a routine false positive for endpoint protection.
+
+Command-line tools, useful for diagnosing capture geometry without any UI in the way:
+
+```sh
+snipline-grab --list                 # monitor layout in physical pixels
+snipline-grab --all -o desktop.png   # whole virtual desktop
+snipline-benchmark --runs 40         # the latency table above
+```
