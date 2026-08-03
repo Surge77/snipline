@@ -119,3 +119,15 @@ Run on each of the configurations `C1`–`C5` defined in `BENCHMARKS.md`.
 - [ ] Open an exported file in an image editor and confirm no recoverable pixels remain
       beneath a solid or pixelate redaction.
 - [ ] Blur is labelled as a cosmetic effect everywhere it appears, never as redaction (D7).
+
+## Export, settings, packaging (M6)
+
+- [ ] A rebound hotkey and a chosen save directory both survive a restart.
+- [ ] Corrupting the settings (registry or INI) by hand still lets the app start, falling back
+      to defaults for the damaged values only.
+- [ ] The `--onedir` build launches on a clean Windows VM with no Python installed.
+- [ ] Startup to tray-ready is under one second on that VM.
+- [ ] Windows Defender does not quarantine the executable (UPX is deliberately off; packed
+      binaries are a common false positive).
+- [ ] `python -m snipline.tools.benchmark` runs on a multi-monitor mixed-DPI machine and the
+      results are recorded in `docs/BENCHMARKS.md` against the right configuration ID.

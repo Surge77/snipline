@@ -38,6 +38,7 @@ snipline = "snipline.app:main"
 # terminal to diagnose capture geometry without any UI in the way.
 [project.scripts]
 snipline-grab = "snipline.tools.grab:main"
+snipline-benchmark = "snipline.tools.benchmark:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

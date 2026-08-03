@@ -14,17 +14,10 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QImage
 
 from snipline.capture.frame import Frame
-from snipline.capture_flow import (
-    CaptureFlow,
-    CaptureOutcome,
-    build_filename,
-    default_save_directory,
-    unique_path,
-)
+from snipline.capture_flow import CaptureFlow, CaptureOutcome
 from snipline.config import Settings
 from snipline.editor.window import EditorWindow
-from snipline.export.clipboard import copy_image_to_clipboard
-from snipline.export.qt_image import save_image
+from snipline.export.sink import ClipboardSink, FileSink, Sink
 
 __all__ = ["EditorSession"]
 
@@ -63,29 +56,29 @@ class EditorSession(QObject):
         return self._window.controller.scene.flatten()
 
     def copy(self) -> CaptureOutcome:
-        image = self.flatten()
-        if not copy_image_to_clipboard(image):
-            return self._flow.report_failure("no clipboard is available")
-
-        self._flow.report_success("Copied to clipboard", f"{image.width()} x {image.height()}")
-        return CaptureOutcome()
+        return self._deliver(ClipboardSink(), "Copied to clipboard")
 
     def save(self) -> CaptureOutcome:
+        # A FileSink per save rather than one per session, because the settings it reads --
+        # directory, format, quality -- can change between saves.
+        sink = FileSink(
+            directory=self._settings.save_directory,
+            export_format=self._settings.export_format,
+            quality=self._settings.jpeg_quality,
+            clock=self._flow.now,
+        )
+        return self._deliver(sink, "Capture saved")
+
+    def _deliver(self, sink: Sink, title: str) -> CaptureOutcome:
+        """Hand the flattened scene to a sink and turn the result into a report.
+
+        Sinks raise; the decision about whether a failure is worth interrupting the user
+        for belongs here, not in the sink.
+        """
         try:
-            directory = self._settings.save_directory or default_save_directory()
-            # unique_path, not the bare filename: saving twice from one editor session is
-            # normal (annotate, save, annotate more, save again) and would otherwise
-            # overwrite the earlier file within the same second.
-            written = save_image(
-                self.flatten(),
-                unique_path(
-                    directory / build_filename(self._flow.now(), self._settings.export_format)
-                ),
-                export_format=self._settings.export_format,
-                quality=self._settings.jpeg_quality,
-            )
-        except (OSError, ValueError) as error:
+            result = sink.deliver(self.flatten())
+        except (OSError, ValueError, RuntimeError) as error:
             return self._flow.report_failure(str(error))
 
-        self._flow.report_success("Capture saved", str(written))
-        return CaptureOutcome(path=written)
+        self._flow.report_success(title, result.description)
+        return CaptureOutcome(path=result.path)
