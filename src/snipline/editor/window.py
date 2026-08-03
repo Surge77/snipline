@@ -27,7 +27,9 @@ from PySide6.QtWidgets import QGraphicsView, QMainWindow, QWidget
 from snipline.capture.frame import Frame
 from snipline.editor.scene import AnnotationScene, EditorController
 from snipline.editor.style import DEFAULT_STYLE, ToolStyle
+from snipline.editor.toolbar import StyleBar, build_tool_actions
 from snipline.editor.tools.arrow import ArrowTool
+from snipline.editor.tools.registry import build_tool
 
 __all__ = ["EditorView", "EditorWindow"]
 
@@ -77,7 +79,10 @@ class EditorWindow(QMainWindow):
         self.setWindowTitle(f"Snipline — {frame.width} x {frame.height}")
         self.setCentralWidget(self._view)
         self.setMinimumSize(*_MIN_WINDOW_SIZE)
+        self._style = style
+        self._tool_name = "arrow"
         self._build_actions()
+        self._build_tool_bar()
 
     @property
     def controller(self) -> EditorController:
@@ -115,6 +120,30 @@ class EditorWindow(QMainWindow):
         for action in (undo, redo, copy, save):
             toolbar.addAction(action)
         self.addAction(close)
+
+    def _build_tool_bar(self) -> None:
+        toolbar = self.addToolBar("Tools")
+        _group, actions = build_tool_actions(self, self.select_tool)
+        for action in actions:
+            toolbar.addAction(action)
+
+        toolbar.addSeparator()
+        self._style_bar = StyleBar(self._style, self)
+        self._style_bar.style_changed.connect(self.set_style)
+        self._style_bar.add_to(toolbar)
+
+    def select_tool(self, name: str) -> None:
+        """Switch to a registered tool by name."""
+        self._tool_name = name
+        self._controller.set_tool(build_tool(name, self._style))
+
+    def set_style(self, style: ToolStyle) -> None:
+        """Apply colour and width to subsequent annotations."""
+        # Style applies to the next annotation, not retroactively to existing ones: an
+        # edit that silently restyled work already done would be surprising and is not
+        # undoable through the same command stack.
+        self._style = style
+        self._controller.set_tool(build_tool(self._tool_name, style))
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt override
         # An explicit signal rather than QObject.destroyed: destroyed fires while the C++
