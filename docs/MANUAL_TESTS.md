@@ -62,6 +62,12 @@ Run on each of the configurations `C1`–`C5` defined in `BENCHMARKS.md`.
 - [ ] The app's own dimming overlay never appears in the output.
 - [ ] A video playing in a browser captures a frame rather than black.
 - [ ] `Esc` cancels with nothing written to clipboard or disk.
+- [ ] Arrow keys nudge the selection edge by exactly one physical pixel; Shift+arrow moves the
+      opposite edge.
+- [ ] The size readout shows **physical** pixels — it must match the dimensions of the image
+      that actually lands on the clipboard, not the logical size on a scaled monitor.
+- [ ] Clicking without dragging captures the whole monitor under the cursor.
+- [ ] Quitting while the overlay is open leaves no frozen image stuck on screen.
 
 ## Editor
 
