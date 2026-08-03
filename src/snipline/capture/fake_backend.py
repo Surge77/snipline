@@ -9,8 +9,10 @@ crops on negative-coordinate layouts) this project is built to avoid.
 
 from __future__ import annotations
 
-from snipline.capture.frame import Frame
+from snipline.capture.frame import BYTES_PER_PIXEL, Frame
 from snipline.platform.geometry import PhysicalRect
+
+__all__ = ["BYTES_PER_PIXEL", "FakeBackend", "pixel_value"]
 
 _CHANNEL_MAX = 256
 
@@ -28,6 +30,28 @@ def pixel_value(x: int, y: int) -> tuple[int, int, int, int]:
     return (blue, green, red, 255)
 
 
+def _gradient_bytes(rect: PhysicalRect) -> bytes:
+    """The same formula as ``pixel_value``, vectorised.
+
+    The scalar loop this replaces spent about a minute per full 4K layout in the suite,
+    which was enough to discourage running the tests -- the fake being slow is a real cost
+    even though it never ships.
+    """
+    import numpy as np
+
+    xs = np.arange(rect.left, rect.left + rect.width, dtype=np.int64)
+    ys = np.arange(rect.top, rect.top + rect.height, dtype=np.int64)
+    columns = np.broadcast_to(xs, (rect.height, rect.width))
+    rows = ys[:, None]
+
+    buffer = np.empty((rect.height, rect.width, 4), dtype=np.uint8)
+    buffer[..., 0] = np.mod(columns, _CHANNEL_MAX)
+    buffer[..., 1] = np.mod(rows, _CHANNEL_MAX)
+    buffer[..., 2] = np.mod(columns + rows, _CHANNEL_MAX)
+    buffer[..., 3] = 255
+    return buffer.tobytes()
+
+
 class FakeBackend:
     """In-memory ``CaptureBackend``."""
 
@@ -37,14 +61,7 @@ class FakeBackend:
 
     def grab(self, rect: PhysicalRect) -> Frame:
         self.grab_calls.append(rect)
-        buffer = bytearray(rect.width * rect.height * 4)
-        offset = 0
-        for row in range(rect.height):
-            y = rect.top + row
-            for column in range(rect.width):
-                buffer[offset : offset + 4] = bytes(pixel_value(rect.left + column, y))
-                offset += 4
-        return Frame(rect=rect, pixels=bytes(buffer))
+        return Frame(rect=rect, pixels=_gradient_bytes(rect))
 
     def close(self) -> None:
         self.closed = True
