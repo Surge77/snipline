@@ -36,6 +36,12 @@ built on top of it.
       It must not fail silently.
 - [ ] Rebinding takes effect without restarting the app.
 - [ ] Hotkey is released on quit; relaunching registers cleanly.
+- [ ] Pressing the hotkey while a *different* application has focus writes a capture — this is
+      the whole point of `RegisterHotKey` over `QShortcut` (D4) and cannot be verified while
+      Snipline itself is focused.
+- [ ] The tray balloon names the written file, and the file is where it says.
+- [ ] Quitting from the tray menu leaves no registered hotkey behind: relaunching must not
+      report the combination as already taken *by Snipline itself*.
 
 ## Multi-monitor
 
