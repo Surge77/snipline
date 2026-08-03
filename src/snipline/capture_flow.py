@@ -20,7 +20,13 @@ from snipline.config import DefaultSink, ExportFormat, Settings
 from snipline.export.clipboard import copy_to_clipboard
 from snipline.export.encode import save_frame
 
-__all__ = ["CaptureFlow", "CaptureOutcome", "build_filename", "default_save_directory"]
+__all__ = [
+    "CaptureFlow",
+    "CaptureOutcome",
+    "build_filename",
+    "default_save_directory",
+    "unique_path",
+]
 
 FILENAME_PREFIX = "Snipline"
 TIMESTAMP_FORMAT = "%Y-%m-%d %H%M%S"
@@ -58,7 +64,7 @@ def build_filename(moment: datetime, export_format: ExportFormat) -> str:
     return f"{FILENAME_PREFIX} {moment.strftime(TIMESTAMP_FORMAT)}.{export_format.value}"
 
 
-def _unique(destination: Path) -> Path:
+def unique_path(destination: Path) -> Path:
     """Avoid overwriting an existing capture.
 
     Two captures inside the same second are easy to trigger by holding the hotkey, and
@@ -133,7 +139,7 @@ class CaptureFlow:
 
     def _write(self, frame: Frame) -> Path:
         directory = self._settings.save_directory or default_save_directory()
-        destination = _unique(
+        destination = unique_path(
             directory / build_filename(self._clock(), self._settings.export_format)
         )
         return save_frame(
@@ -142,6 +148,13 @@ class CaptureFlow:
             export_format=self._settings.export_format,
             quality=self._settings.jpeg_quality,
         )
+
+    def now(self) -> datetime:
+        """The flow's clock. Exposed so the editor timestamps files the same way."""
+        return self._clock()
+
+    def report_success(self, title: str, message: str) -> None:
+        self._report(title, message, is_error=False)
 
     def report_failure(self, message: str) -> CaptureOutcome:
         """Report a failure raised before there was anything to deliver."""

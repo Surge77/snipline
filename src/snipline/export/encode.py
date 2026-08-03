@@ -76,3 +76,4 @@ def save_frame(
 
     image.save(destination, format=_PILLOW_FORMAT[export_format], **options)
     return destination
+

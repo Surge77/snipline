@@ -98,3 +98,13 @@ Run on each of the configurations `C1`–`C5` defined in `BENCHMARKS.md`.
 
 - [ ] Launching a second time triggers a capture in the running instance and exits.
 - [ ] Killing the process leaves no stale lock that blocks the next launch.
+
+## Editor (M4)
+
+- [ ] Ctrl+Z and Ctrl+Y (and Ctrl+Shift+Z) undo and redo arrows in mixed order.
+- [ ] An arrow drawn while the window is scrolled lands under the cursor, not offset by the
+      scroll position.
+- [ ] Saving twice from one editor session produces two files, not one overwritten file.
+- [ ] A 4K capture saved from the editor is 4K in the file — not the size of the window it
+      was displayed in.
+- [ ] Closing the editor with unsaved annotations does not crash or leave a stray window.

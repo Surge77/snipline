@@ -48,3 +48,15 @@ def copy_to_clipboard(frame: Frame) -> bool:
 
     QApplication.clipboard().setImage(frame_to_qimage(frame))
     return True
+
+
+def copy_image_to_clipboard(image: QImage) -> bool:
+    """Put an already-rendered image on the clipboard.
+
+    Used for the flattened editor output, which is a QImage rather than a captured Frame.
+    """
+    if QApplication.instance() is None:
+        return False
+
+    QApplication.clipboard().setImage(image)
+    return True

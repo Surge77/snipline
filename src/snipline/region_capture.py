@@ -28,15 +28,19 @@ class RegionCapture(QObject):
 
     finished = Signal()
 
+    selected = Signal(object)  # Frame, cropped out of the frozen desktop
+
     def __init__(
         self,
         service: CaptureService,
         flow: CaptureFlow,
         parent: QObject | None = None,
+        deliver: bool = True,
     ) -> None:
         super().__init__(parent)
         self._service = service
         self._flow = flow
+        self._deliver = deliver
         self._controller: OverlayController | None = None
 
     @property
@@ -80,7 +84,14 @@ class RegionCapture(QObject):
             return
 
         try:
-            self._flow.deliver(controller.crop(region))
+            cropped = controller.crop(region)
+            # Either straight to the configured sink, or handed to whoever is listening --
+            # the editor, when one is wired up. The capture path itself stays unaware of
+            # annotations.
+            if self._deliver:
+                self._flow.deliver(cropped)
+            else:
+                self.selected.emit(cropped)
         finally:
             # Teardown must happen even if delivery fails, or the next hotkey press is
             # refused as re-entrant and the tool appears dead.

@@ -14,9 +14,11 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
+from snipline.capture.frame import Frame
 from snipline.capture.service import CaptureService
 from snipline.capture_flow import CaptureFlow
 from snipline.config import Settings
+from snipline.editor_session import EditorSession
 from snipline.platform.dpi import declare_dpi_awareness
 from snipline.platform.hotkey import GlobalHotkey, HotkeyError
 from snipline.platform.keys import parse_hotkey
@@ -108,7 +110,19 @@ def main() -> int:
     tray = Tray(APP_NAME)
     service = CaptureService(backend=MssBackend())
     flow = CaptureFlow(service=service, settings=settings, reporter=tray.notify)
-    region = RegionCapture(service=service, flow=flow, parent=app)
+    region = RegionCapture(service=service, flow=flow, parent=app, deliver=False)
+
+    # Sessions are held in a list because a QMainWindow with no parent is owned by Python:
+    # dropping the reference closes the editor the instant the capture finishes.
+    sessions: list[EditorSession] = []
+
+    def open_editor(frame: Frame) -> None:
+        session = EditorSession(frame=frame, settings=settings, flow=flow, parent=app)
+        session.closed.connect(lambda: sessions.remove(session) if session in sessions else None)
+        sessions.append(session)
+        session.open()
+
+    region.selected.connect(open_editor)
 
     hotkey = wire(app, flow, tray, instance, region)
     try:
