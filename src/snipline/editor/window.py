@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from PySide6.QtCore import QPointF, Qt, Signal
+from PySide6.QtCore import QPointF, QSize, Qt, Signal
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -22,19 +22,21 @@ from PySide6.QtGui import (
     QPainter,
     QScreen,
 )
-from PySide6.QtWidgets import QGraphicsView, QMainWindow, QWidget
+from PySide6.QtWidgets import QGraphicsView, QMainWindow, QToolBar, QWidget
 
 from snipline.capture.frame import Frame
 from snipline.editor.scene import AnnotationScene, EditorController
 from snipline.editor.style import DEFAULT_STYLE, ToolStyle
-from snipline.editor.toolbar import StyleBar, build_tool_actions
+from snipline.editor.toolbar import StyleBar, build_tool_actions, split_at_redaction
 from snipline.editor.tools.arrow import ArrowTool
 from snipline.editor.tools.registry import build_tool
 from snipline.editor.tools.select import SELECT_TOOL_NAME
+from snipline.ui.mark import app_icon
 
 __all__ = ["EditorView", "EditorWindow"]
 
 _MIN_WINDOW_SIZE = (480, 360)
+_TOOL_ICON_PX = 18
 # Leaves room for the toolbar and window chrome so a full-screen capture still opens as a
 # window rather than something taller than the display it opened on.
 _SCREEN_FRACTION = 0.8
@@ -96,7 +98,8 @@ class EditorWindow(QMainWindow):
         self._controller = EditorController(scene=AnnotationScene(frame), tool=ArrowTool(style))
         self._view = EditorView(self._controller)
 
-        self.setWindowTitle(f"Snipline — {frame.width} x {frame.height}")
+        self.setWindowTitle(f"Snipline — {frame.width} × {frame.height}")
+        self.setWindowIcon(app_icon())
         self.setCentralWidget(self._view)
         self.setMinimumSize(*_MIN_WINDOW_SIZE)
         self._style = style
@@ -141,6 +144,12 @@ class EditorWindow(QMainWindow):
         close.triggered.connect(self.close)
 
         toolbar = self.addToolBar("Edit")
+        # Text only here, against icon-and-text on the tool bar. These are verbs applied to
+        # a selection, not modes the user is switching between, and giving them glyphs of
+        # the same weight as the tools makes the one row that matters harder to scan.
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        toolbar.setMovable(False)
+        toolbar.setFloatable(False)
         for action in (undo, redo, delete, copy, save):
             toolbar.addAction(action)
         self.addAction(close)
@@ -151,15 +160,39 @@ class EditorWindow(QMainWindow):
             self._controller.delete(item)
 
     def _build_tool_bar(self) -> None:
-        toolbar = self.addToolBar("Tools")
+        # Its own row. Ten labelled tools and five edit actions do not fit across one
+        # toolbar at any reasonable window width, and what Qt does when they do not fit is
+        # move the overflow behind a chevron -- which is where the redaction tools ended up,
+        # since they are last. A tool the user cannot see is a tool they will not reach for.
+        self.addToolBarBreak()
+        toolbar = self._tool_row("Tools")
         _group, actions = build_tool_actions(self, self.select_tool)
-        for action in actions:
+        drawing, redaction = split_at_redaction(actions)
+        for action in drawing:
             toolbar.addAction(action)
 
         toolbar.addSeparator()
         self._style_bar = StyleBar(self._style, self)
         self._style_bar.style_changed.connect(self.set_style)
         self._style_bar.add_to(toolbar)
+
+        # Redaction gets its own row rather than the tail of a shared one. On any window
+        # narrower than every label laid end to end, Qt puts the overflow behind a chevron,
+        # and the overflow is whatever comes last -- which is precisely the group a user
+        # must be able to find when they are about to publish a screenshot.
+        if redaction:
+            self.addToolBarBreak()
+            redaction_row = self._tool_row("Redaction")
+            for action in redaction:
+                redaction_row.addAction(action)
+
+    def _tool_row(self, title: str) -> QToolBar:
+        toolbar = self.addToolBar(title)
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        toolbar.setIconSize(QSize(_TOOL_ICON_PX, _TOOL_ICON_PX))
+        toolbar.setMovable(False)
+        toolbar.setFloatable(False)
+        return toolbar
 
     def select_tool(self, name: str) -> None:
         """Switch to a registered tool by name."""

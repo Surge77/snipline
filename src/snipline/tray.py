@@ -6,44 +6,27 @@ in ``CaptureFlow``.
 
 The icon is drawn in code rather than loaded from a file. A missing icon resource is a
 classic PyInstaller failure -- it works in development and breaks in the bundle -- and this
-sidesteps it entirely for a shape this simple.
+sidesteps it entirely for a shape this simple. The drawing itself now lives in ``ui/mark``,
+so the tray, the window, and the executable's own icon are one shape rather than three that
+happen to look alike.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
-__all__ = ["Tray", "build_icon"]
+from snipline.ui.mark import tray_icon
 
-_ICON_SIZE = 64
-_MARGIN = 10
-_STROKE = 6
-_CORNER = 20
-_ACCENT = "#3B82F6"
+__all__ = ["Tray", "build_icon"]
 
 _NOTIFICATION_TIMEOUT_MS = 4000
 
 
 def build_icon() -> QIcon:
-    """A crop-marks glyph, drawn at runtime."""
-    pixmap = QPixmap(_ICON_SIZE, _ICON_SIZE)
-    pixmap.fill(QColor(0, 0, 0, 0))
-
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.setPen(QPen(QColor(_ACCENT), _STROKE))
-
-    near, far = _MARGIN, _ICON_SIZE - _MARGIN
-    # Four corner brackets, leaving the middle open -- a selection frame rather than a box.
-    for x_edge, x_step in ((near, 1), (far, -1)):
-        for y_edge, y_step in ((near, 1), (far, -1)):
-            painter.drawLine(x_edge, y_edge, x_edge + _CORNER * x_step, y_edge)
-            painter.drawLine(x_edge, y_edge, x_edge, y_edge + _CORNER * y_step)
-    painter.end()
-
-    return QIcon(pixmap)
+    """The mark, rendered at each size the shell asks for."""
+    return tray_icon()
 
 
 class Tray(QObject):

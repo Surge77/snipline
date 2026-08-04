@@ -11,6 +11,15 @@ from PyInstaller.utils.hooks import collect_submodules
 
 APP_NAME = "Snipline"
 
+# Regenerate with: python -m snipline.tools.make_icons
+#
+# This is a build-time input only. PyInstaller copies it into the executable's resource
+# table, so the running application never opens it -- which is why having it does not
+# reintroduce the missing-resource failure that every runtime glyph is drawn in code to
+# avoid. It is deliberately absent from `datas`: shipping it alongside the exe would make it
+# a runtime file again for no benefit.
+ICON = "assets/snipline.ico"
+
 # PySide6 pulls in the whole of Qt by default. None of these are imported anywhere in the
 # source tree -- verified with grep before excluding them.
 EXCLUDED_QT = [
@@ -75,6 +84,7 @@ exe = EXE(
     # console=False: this is a tray application. A console window appearing behind every
     # capture would be worse than useless.
     console=False,
+    icon=ICON,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

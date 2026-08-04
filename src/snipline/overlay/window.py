@@ -17,7 +17,7 @@ from __future__ import annotations
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
 from PySide6.QtGui import (
     QColor,
-    QGuiApplication,
+    QCursor,
     QKeyEvent,
     QMouseEvent,
     QPainter,
@@ -28,27 +28,28 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QWidget
 
+from snipline.overlay import chrome
+from snipline.overlay.magnifier import LOUPE_SIZE, Magnifier
 from snipline.overlay.mapping import local_to_physical, physical_to_local
 from snipline.overlay.selection import Edge, SelectionModel
 from snipline.platform.geometry import MonitorInfo
+from snipline.ui import theme
 
 __all__ = ["OverlayWindow"]
 
-_DIM = QColor(0, 0, 0, 110)
-_BORDER = QColor("#3B82F6")
+_DIM = QColor(0, 0, 0, 122)
+_BORDER = QColor(theme.ACCENT)
 _BORDER_WIDTH = 2
-_LABEL_MARGIN = 8
-_LABEL_PADDING = 6
-_LABEL_BACKGROUND = QColor(17, 24, 39, 220)
 
-# Slack allowed when matching a Qt screen to a Win32 monitor by origin. Wide enough to
-# absorb the rounding in Qt's logical-to-physical reconstruction, far narrower than the
-# hundreds of pixels separating any two real monitors.
-_ORIGIN_TOLERANCE_PX = 4
-
-# How far the chrome -- border and the size label sitting above the selection -- extends
-# beyond the selection itself. Used to widen partial repaints so none of it is left stale.
+# How far the chrome -- border, handles, and the size readout sitting above the selection --
+# extends beyond the selection itself. Used to widen partial repaints so none of it is left
+# stale.
 _CHROME_MARGIN = 64
+
+# The loupe is repainted on every pointer move, so its area is invalidated on its own rather
+# than by widening the selection repaint to reach it. Padding covers the readout strip and
+# the flip to the opposite side of the cursor.
+_LOUPE_MARGIN = LOUPE_SIZE + 64
 
 _NUDGE_STEP_PX = 1
 _ARROW_EDGES = {
@@ -72,11 +73,14 @@ class OverlayWindow(QWidget):
         monitor: MonitorInfo,
         frozen: QPixmap,
         model: SelectionModel,
+        show_magnifier: bool = True,
     ) -> None:
         super().__init__(None)
         self._monitor = monitor
         self._frozen = frozen
         self._model = model
+        self._magnifier = Magnifier(frozen) if show_magnifier else None
+        self._cursor: QPoint | None = None
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -115,6 +119,12 @@ class OverlayWindow(QWidget):
         self.showFullScreen()
         self.raise_()
         self.activateWindow()
+        # Seed the pointer position rather than waiting for the first move event. Without
+        # this the hint and the loupe are invisible until the user jiggles the mouse, which
+        # is the one moment the hint is meant to be doing its job.
+        local = self.mapFromGlobal(QCursor.pos())
+        if self.rect().contains(local):
+            self._cursor = local
 
     # -- painting ---------------------------------------------------------------
 
@@ -125,6 +135,12 @@ class OverlayWindow(QWidget):
         selection = self._local_selection()
         if selection is None:
             painter.fillRect(self.rect(), _DIM)
+            # Only the screen the pointer is on gets the hint. Repeating it on all three
+            # screens of a multi-monitor desktop is three times the instruction and none of
+            # the guidance.
+            if self._cursor is not None:
+                chrome.paint_hint(painter, self.rect())
+            self._paint_magnifier(painter)
             painter.end()
             return
 
@@ -137,8 +153,22 @@ class OverlayWindow(QWidget):
         # pixels the user is lining the selection up against.
         painter.setPen(QPen(_BORDER, _BORDER_WIDTH))
         painter.drawRect(selection.adjusted(-_BORDER_WIDTH, -_BORDER_WIDTH, 0, 0))
+        chrome.paint_handles(painter, selection)
         self._draw_size_label(painter, selection)
+        self._paint_magnifier(painter)
         painter.end()
+
+    def _paint_magnifier(self, painter: QPainter) -> None:
+        if self._magnifier is None or self._cursor is None:
+            return
+        width = self.width()
+        if width <= 0:
+            return
+        # Widget coordinates are logical; the frozen pixmap is physical. On a 150% screen
+        # those differ by half again, and sampling the loupe at the widget's coordinates
+        # would magnify the wrong pixels.
+        ratio = self._frozen.width() / width
+        self._magnifier.paint(painter, self._cursor, self.rect(), ratio)
 
     def surrounding_bands(self, selection: QRect) -> list[QRect]:
         """The four dim bands around the selection.
@@ -174,23 +204,9 @@ class OverlayWindow(QWidget):
         physical = self._model.rect
         if physical is None:
             return
-
-        # Physical pixels, not logical: the number shown must be the size of the file the
-        # user ends up with.
-        text = f"{physical.width} x {physical.height}"
-        metrics = painter.fontMetrics()
-        box = metrics.boundingRect(text).adjusted(
-            -_LABEL_PADDING, -_LABEL_PADDING, _LABEL_PADDING, _LABEL_PADDING
+        chrome.paint_size_readout(
+            painter, selection, self.rect(), physical.width, physical.height
         )
-
-        anchor = QPoint(selection.left(), selection.top() - box.height() - _LABEL_MARGIN)
-        if anchor.y() < 0:  # selection is against the top edge; put the label inside it
-            anchor.setY(selection.top() + _LABEL_MARGIN)
-        box.moveTopLeft(anchor)
-
-        painter.fillRect(box, _LABEL_BACKGROUND)
-        painter.setPen(QColor("#FFFFFF"))
-        painter.drawText(box, int(Qt.AlignmentFlag.AlignCenter), text)
 
     def _local_selection(self) -> QRect | None:
         physical = self._model.rect
@@ -210,10 +226,27 @@ class OverlayWindow(QWidget):
         self.selection_changed.emit()
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt override
+        self._track_cursor(event.position().toPoint())
         if not self._model.is_dragging:
             return
         self._model.update(*self._physical_position(event))
         self.selection_changed.emit()
+
+    def _track_cursor(self, position: QPoint) -> None:
+        """Record the pointer and repaint only what the loupe covers.
+
+        Mouse tracking is on, so this runs for every pointer move whether or not a drag is
+        in progress. A full-screen invalidation here would blit the whole frozen pixmap on
+        each one, which is precisely the cost ``refresh`` exists to avoid.
+        """
+        previous, self._cursor = self._cursor, position
+        if self._magnifier is None:
+            return
+
+        stale = QRect(position, position)
+        if previous is not None:
+            stale = stale.united(QRect(previous, previous))
+        self.update(stale.adjusted(-_LOUPE_MARGIN, -_LOUPE_MARGIN, _LOUPE_MARGIN, _LOUPE_MARGIN))
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt override
         if event.button() != Qt.MouseButton.LeftButton or not self._model.is_dragging:
@@ -245,29 +278,3 @@ class OverlayWindow(QWidget):
     def _physical_position(self, event: QMouseEvent) -> tuple[int, int]:
         point = event.position().toPoint()
         return local_to_physical(self._monitor, point.x(), point.y())
-
-
-def screen_for(monitor: MonitorInfo) -> QScreen | None:
-    """Find the QScreen matching a monitor, by physical origin.
-
-    Matched on position rather than index: Qt's screen order and the Win32 enumeration
-    order are independently defined and do not have to agree.
-
-    The match is nearest-origin rather than exact. Qt reports logical geometry, so
-    reconstructing a physical origin from it rounds, and on a mixed-DPI desktop the rounding
-    error accumulates across screens. Demanding an exact hit means one stray pixel drops the
-    screen from the overlay -- and if it happens on every screen, the hotkey silently does
-    nothing, which is this application's worst failure mode.
-    """
-    best: QScreen | None = None
-    best_distance = _ORIGIN_TOLERANCE_PX
-    for screen in QGuiApplication.screens():
-        geometry = screen.geometry()
-        ratio = screen.devicePixelRatio()
-        distance = max(
-            abs(round(geometry.left() * ratio) - monitor.bounds.left),
-            abs(round(geometry.top() * ratio) - monitor.bounds.top),
-        )
-        if distance < best_distance:
-            best, best_distance = screen, distance
-    return best
