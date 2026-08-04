@@ -1,3 +1,5 @@
+<img src="assets/icon-256.png" width="88" align="right" alt="">
+
 # Snipline
 
 A Windows screenshot tool with a real annotation editor. Global hotkey → region select across
@@ -47,12 +49,15 @@ missing is *timing* on real multi-monitor hardware, not correctness coverage. Se
 ## Features
 
 - Global hotkey capture that works while another application has focus
-- Frozen-frame region selection overlay with a pixel-accurate magnifier loupe
+- Frozen-frame region selection overlay with a nearest-neighbour magnifier loupe, showing pixel
+  coordinates and the colour under the pointer
 - Vector annotation editor with full undo/redo: arrow, rectangle, ellipse, freehand, text,
   numbered step badges
 - Redaction: pixelate and solid fill (see the security note below)
 - Export to clipboard or file (PNG, WebP, JPEG)
 - System tray, single-instance enforcement, configurable hotkey
+- Dark chrome throughout, with every icon drawn from geometry rather than shipped as a file (D12,
+  D13)
 
 ## Using it
 
@@ -133,6 +138,16 @@ Produces `dist/Snipline/Snipline.exe` (~159 MB unpacked). The build is `--onedir
 `--onefile` unpacks to a temp directory on every launch, which adds seconds of startup to a tool
 whose whole point is responding instantly (D10). UPX compression is off because packed binaries
 are a routine false positive for endpoint protection.
+
+The executable's icon comes from `assets/snipline.ico`, which is committed so a fresh clone can
+build without a Qt display first. It is a build-time input only — PyInstaller embeds it into the
+exe's resource table and the running application never opens it, which is what keeps a real icon
+file from reintroducing the missing-resource failure that every runtime glyph is drawn in code to
+avoid (D13). Regenerate it after changing the mark:
+
+```sh
+python -m snipline.tools.make_icons
+```
 
 Command-line tools, useful for diagnosing capture geometry without any UI in the way:
 

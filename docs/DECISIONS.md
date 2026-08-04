@@ -164,3 +164,62 @@ A screenshot tool sees whatever is on screen, which is among the most sensitive 
 Shipping with zero network capability makes that guarantee trivially auditable — there is no code
 path to inspect. Adding any network feature later changes the tool's trust model and requires its
 own decision record, not a quiet dependency addition.
+
+---
+
+## D12 — Dark chrome only, not a theme that follows the OS
+
+**Chosen:** one committed dark surface for every window and the overlay.
+
+A screenshot annotator draws its chrome over arbitrary pixels it did not choose. A theme following
+the OS would put light chrome over a light screenshot, which is exactly when the toolbar most needs
+to separate from the content underneath it. One surface colour is a smaller compromise than a
+contrast guarantee that only holds half the time.
+
+The accent is the blue the selection border already used, so the overlay and the editor read as one
+application rather than two that happen to launch together.
+
+**Revisit if:** Windows exposes a reliable per-window backdrop that keeps chrome legible over
+arbitrary content, or users on light desktops report the editor reads as a foreign application.
+
+---
+
+## D13 — Icons drawn in code; the `.ico` is a build input, not a runtime file
+
+**Chosen:** every icon the running application shows is drawn with QPainter from one vector
+definition in `ui/mark.py` and `ui/icons.py`. `assets/snipline.ico` exists, is committed, and is
+consumed only by `snipline.spec`.
+
+A missing icon resource is the classic PyInstaller failure: it works in development, where the file
+sits next to the source, and breaks in the bundle, where it does not. Drawing the glyphs sidesteps
+it for shapes this simple.
+
+The executable's own icon cannot be procedural — PyInstaller needs a real `.ico` at build time. That
+turns out not to weaken anything, and the distinction is the whole decision: **build-time assets are
+embedded into the exe's resource table and never opened at runtime, so they cannot fail the way a
+runtime resource can.** The file is deliberately absent from the spec's `datas`; shipping it beside
+the exe would make it a runtime file again for no benefit.
+
+It is committed rather than generated during the build so a fresh clone can run `pyinstaller
+snipline.spec` without a Qt display first. Regenerate with `python -m snipline.tools.make_icons`.
+
+**Revisit if:** the icon set grows past what is readable as geometry, at which point SVG assets and
+an explicit bundling story are worth the risk that this avoids.
+
+---
+
+## D14 — The magnifier loupe samples nearest-neighbour
+
+**Chosen:** no smoothing when magnifying, and a one-pixel outlined crosshair rather than a filled
+one.
+
+`config.show_magnifier` was persisted from M6 onward while nothing drew a loupe; the setting toggled
+nothing until it was built. Now that it exists, the sampling rule matters more than it looks: a
+smoothed magnifier is a picture of what the pixels nearly are. This application's claim is that the
+region selected is the region captured, and the loupe exists so a user can put an edge on the right
+pixel. Interpolating there is the same category of error as dimming the selected area — chrome
+misrepresenting the capture.
+
+The frozen pixmap is converted to a `QImage` once, at construction. `QPixmap::toImage` copies off
+the graphics backend, and doing that per pointer-move to read one pixel's colour is a full-screen
+copy on every event of a drag.

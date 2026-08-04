@@ -122,6 +122,16 @@ Contains: rubber band, dimensions readout, magnifier loupe with pixel coordinate
 cursor, keyboard nudge, `Esc` cancellation, click-without-drag to select the window or monitor
 under the cursor.
 
+### `ui/`
+
+Design tokens, the brand mark, the tool glyphs, and the style sheet. Separate from `editor/` and
+`overlay/` because both need it and neither owns it; nothing in here knows what a capture is.
+
+`theme.py` imports no Qt, so the tokens are assertable without a `QApplication` and the style sheet
+is built from them rather than repeating their values. Every icon the running application shows is
+drawn with `QPainter` from one vector definition — see D13 for why, and for why the executable's own
+`.ico` is not an exception to it.
+
 ### `editor/`
 
 `QGraphicsScene` with the captured pixmap as the background item and one `QGraphicsItem` per
@@ -171,21 +181,40 @@ which is the kind of bug that only shows up in someone else's bug report.
 
 ```
 src/snipline/
-  app.py                  QApplication, tray, single instance
-  config.py               settings dataclass, QSettings-backed
+  app.py                  QApplication, wiring, hotkey registration
+  config.py               settings dataclass
+  settings_store.py       QSettings persistence for it
+  tray.py                 tray icon and menu, as signals
+  single_instance.py      named-mutex lock, hands off to the running copy
+  capture_flow.py         hotkey -> capture -> deliver
+  region_capture.py       hotkey -> overlay -> cropped frame
+  editor_session.py       frame -> editor window -> export
   platform/
-    dpi.py  geometry.py  hotkey.py  monitors.py  clipboard_win.py
+    dpi.py  geometry.py  hotkey.py  keys.py  monitors.py
   capture/
-    backend.py  mss_backend.py  fake_backend.py  frame.py
+    backend.py  mss_backend.py  fake_backend.py  frame.py  service.py
   overlay/
-    overlay_window.py  selection.py  magnifier.py
+    controller.py         one window per screen, one shared model
+    window.py             painting and events
+    chrome.py             handles, size readout, hint
+    magnifier.py          the loupe
+    selection.py          the state machine; no Qt
+    mapping.py            logical <-> physical, and Qt screen matching
   editor/
-    editor_window.py  scene.py  toolbar.py  commands.py
-    tools/  base.py  arrow.py  rect.py  text.py  redact.py  step.py
+    window.py  scene.py  commands.py  toolbar.py  style.py
+    tools/  base.py  registry.py  select.py  arrow.py  shapes.py
+            freehand.py  text.py  step.py  redaction.py
   export/
-    sinks.py  flatten.py  encoders.py
+    sink.py  clipboard.py  encode.py  qt_image.py
+  ui/
+    theme.py              design tokens; imports no Qt
+    mark.py  icons.py  qss.py
+  tools/
+    grab.py  benchmark.py  make_icons.py
 tests/                    mirrors src/, FakeBackend throughout
+assets/                   build-time only; see D13
 ```
 
-Hard limit of 300 lines per file. `editor/` is the package most likely to breach it — split by tool
-rather than growing `editor_window.py`.
+Hard limit of 300 lines per file. `overlay/window.py` and `editor/window.py` are the two that
+approach it — split by responsibility (`chrome.py` and `magnifier.py` came out of the former) rather
+than letting either grow.

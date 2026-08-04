@@ -35,7 +35,8 @@ def _click(window: EditorWindow, kind: QMouseEvent.Type, x: int, y: int) -> QMou
 
 
 def test_the_title_states_the_physical_size(qapp: QApplication) -> None:
-    assert "400 x 300" in _window().windowTitle()
+    # A multiplication sign, not the letter x, matching the overlay's size readout.
+    assert "400 × 300" in _window().windowTitle()
 
 
 def test_the_scene_is_sized_to_the_capture(qapp: QApplication) -> None:

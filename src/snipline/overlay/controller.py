@@ -17,9 +17,9 @@ from PySide6.QtGui import QPixmap
 
 from snipline.capture.frame import Frame
 from snipline.export.clipboard import frame_to_qimage
-from snipline.overlay.mapping import frame_slice_for
+from snipline.overlay.mapping import frame_slice_for, screen_for
 from snipline.overlay.selection import SelectionModel
-from snipline.overlay.window import OverlayWindow, screen_for
+from snipline.overlay.window import OverlayWindow
 from snipline.platform.geometry import MonitorInfo, PhysicalRect
 
 __all__ = ["OverlayController"]
@@ -36,9 +36,11 @@ class OverlayController(QObject):
         frozen: Frame,
         monitors: Sequence[MonitorInfo],
         parent: QObject | None = None,
+        show_magnifier: bool = True,
     ) -> None:
         super().__init__(parent)
         self._frozen = frozen
+        self._show_magnifier = show_magnifier
         self._monitors = list(monitors)
         self._model = SelectionModel(desktop=frozen.rect, monitors=self._monitors)
         self._windows: list[OverlayWindow] = []
@@ -73,6 +75,7 @@ class OverlayController(QObject):
                     )
                 ),
                 model=self._model,
+                show_magnifier=self._show_magnifier,
             )
             window.committed.connect(self.commit)
             window.cancelled.connect(self.cancel)

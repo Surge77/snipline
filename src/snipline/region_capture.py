@@ -36,11 +36,13 @@ class RegionCapture(QObject):
         flow: CaptureFlow,
         parent: QObject | None = None,
         deliver: bool = True,
+        show_magnifier: bool = True,
     ) -> None:
         super().__init__(parent)
         self._service = service
         self._flow = flow
         self._deliver = deliver
+        self._show_magnifier = show_magnifier
         self._controller: OverlayController | None = None
 
     @property
@@ -67,7 +69,9 @@ class RegionCapture(QObject):
             self._flow.report_failure(str(error))
             return False
 
-        controller = OverlayController(frozen=frozen, monitors=monitors)
+        controller = OverlayController(
+            frozen=frozen, monitors=monitors, show_magnifier=self._show_magnifier
+        )
         controller.selected.connect(self._on_selected)
         controller.cancelled.connect(self._on_cancelled)
         self._controller = controller

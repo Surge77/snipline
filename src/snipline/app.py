@@ -26,6 +26,8 @@ from snipline.region_capture import RegionCapture
 from snipline.settings_store import SettingsStore
 from snipline.single_instance import SingleInstance
 from snipline.tray import Tray
+from snipline.ui.mark import app_icon
+from snipline.ui.qss import apply_theme
 
 APP_NAME = "Snipline"
 ORG_NAME = "Snipline"
@@ -44,6 +46,8 @@ def configure_application(app: QApplication) -> QApplication:
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(ORG_NAME)
     app.setQuitOnLastWindowClosed(False)  # the tray outlives every window
+    app.setWindowIcon(app_icon())
+    apply_theme(app)
     return app
 
 
@@ -114,7 +118,13 @@ def main() -> int:
     tray = Tray(APP_NAME)
     service = CaptureService(backend=MssBackend())
     flow = CaptureFlow(service=service, settings=settings, reporter=tray.notify)
-    region = RegionCapture(service=service, flow=flow, parent=app, deliver=False)
+    region = RegionCapture(
+        service=service,
+        flow=flow,
+        parent=app,
+        deliver=False,
+        show_magnifier=settings.show_magnifier,
+    )
 
     # Sessions are held in a list because a QMainWindow with no parent is owned by Python:
     # dropping the reference closes the editor the instant the capture finishes.
