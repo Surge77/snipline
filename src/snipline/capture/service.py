@@ -43,6 +43,17 @@ class CaptureService:
     def grab_desktop(self) -> Frame:
         return self._backend.grab(self.desktop_rect())
 
+    def grab_desktop_with_monitors(self) -> tuple[Frame, Sequence[MonitorInfo]]:
+        """The frozen desktop and the layout it was derived from, in one enumeration.
+
+        The overlay needs both. Asking separately walks ``EnumDisplayMonitors`` twice per
+        capture, once per display each time, on the span the benchmark measures -- and the
+        second walk can disagree with the first if a display changes in between, which would
+        slice the frozen frame against a layout it was not captured from.
+        """
+        monitors = self.monitors()
+        return self._backend.grab(virtual_desktop_of(monitors)), monitors
+
     def grab_monitor(self, index: int) -> Frame:
         monitors = self.monitors()
         for monitor in monitors:

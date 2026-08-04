@@ -30,6 +30,7 @@ from snipline.editor.style import DEFAULT_STYLE, ToolStyle
 from snipline.editor.toolbar import StyleBar, build_tool_actions
 from snipline.editor.tools.arrow import ArrowTool
 from snipline.editor.tools.registry import build_tool
+from snipline.editor.tools.select import SELECT_TOOL_NAME
 
 __all__ = ["EditorView", "EditorWindow"]
 
@@ -40,7 +41,13 @@ _SCREEN_FRACTION = 0.8
 
 
 class EditorView(QGraphicsView):
-    """Forwards mouse events to the controller in scene coordinates."""
+    """Forwards mouse events to the controller in scene coordinates.
+
+    Except under the select tool, where the events go to the scene instead. Without that
+    branch the view consumes every press and release, and the ``ItemIsMovable`` and
+    ``ItemIsSelectable`` flags that every annotation sets are unreachable -- annotations can
+    be drawn and undone but never picked up, and a text item's caret cannot be placed.
+    """
 
     def __init__(self, controller: EditorController, parent: QWidget | None = None) -> None:
         super().__init__(controller.scene, parent)
@@ -49,17 +56,30 @@ class EditorView(QGraphicsView):
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.CrossCursor)
 
+    @property
+    def is_selecting(self) -> bool:
+        return self._controller.tool.name == SELECT_TOOL_NAME
+
     def _scene_position(self, event: QMouseEvent) -> QPointF:
         return self.mapToScene(event.position().toPoint())
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt override
+        if self.is_selecting:
+            super().mousePressEvent(event)
+            return
         if event.button() == Qt.MouseButton.LeftButton:
             self._controller.press(self._scene_position(event))
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt override
+        if self.is_selecting:
+            super().mouseMoveEvent(event)
+            return
         self._controller.move(self._scene_position(event))
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt override
+        if self.is_selecting:
+            super().mouseReleaseEvent(event)
+            return
         if event.button() == Qt.MouseButton.LeftButton:
             self._controller.release(self._scene_position(event))
 
@@ -112,14 +132,23 @@ class EditorWindow(QMainWindow):
         save.setShortcut(QKeySequence.StandardKey.Save)
         save.triggered.connect(self.export_requested)
 
+        delete = QAction("Delete", self)
+        delete.setShortcut(QKeySequence(QKeySequence.StandardKey.Delete))
+        delete.triggered.connect(self.delete_selected)
+
         close = QAction("Close", self)
         close.setShortcut(QKeySequence(Qt.Key.Key_Escape))
         close.triggered.connect(self.close)
 
         toolbar = self.addToolBar("Edit")
-        for action in (undo, redo, copy, save):
+        for action in (undo, redo, delete, copy, save):
             toolbar.addAction(action)
         self.addAction(close)
+
+    def delete_selected(self) -> None:
+        """Remove the selected annotations, undoably."""
+        for item in self._controller.scene.selectedItems():
+            self._controller.delete(item)
 
     def _build_tool_bar(self) -> None:
         toolbar = self.addToolBar("Tools")

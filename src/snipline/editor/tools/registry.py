@@ -15,11 +15,12 @@ from snipline.editor.tools.arrow import ArrowTool
 from snipline.editor.tools.base import Tool
 from snipline.editor.tools.freehand import FreehandTool
 from snipline.editor.tools.redaction import BlurTool, PixelateTool, SolidFillTool
+from snipline.editor.tools.select import SelectTool
 from snipline.editor.tools.shapes import EllipseTool, RectangleTool
 from snipline.editor.tools.step import StepTool
 from snipline.editor.tools.text import TextTool
 
-__all__ = ["TOOLS", "ToolEntry", "build_tool", "tool_names"]
+__all__ = ["TOOLS", "ToolEntry", "build_tool", "drawing_tool_names", "tool_names"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,12 +29,17 @@ class ToolEntry:
     label: str
     factory: Callable[[ToolStyle], Tool]
     is_redaction: bool = False
+    # False for tools that manipulate existing annotations rather than producing new ones.
+    # They satisfy the same interface, so the editor still needs no branch for them; only
+    # the "every tool commits an item" claim does not apply.
+    draws: bool = True
 
 
 # Order is the toolbar order: drawing tools first, redaction last and grouped, so the
 # cosmetic blur sits next to the tools it must not be confused with.
 TOOLS: Sequence[ToolEntry] = (
     ToolEntry("arrow", "Arrow", ArrowTool),
+    ToolEntry("select", "Select", SelectTool, draws=False),
     ToolEntry("rectangle", "Rectangle", RectangleTool),
     ToolEntry("ellipse", "Ellipse", EllipseTool),
     ToolEntry("freehand", "Freehand", FreehandTool),
@@ -49,6 +55,11 @@ TOOLS: Sequence[ToolEntry] = (
 
 def tool_names() -> list[str]:
     return [entry.name for entry in TOOLS]
+
+
+def drawing_tool_names() -> list[str]:
+    """Tools that commit a new annotation per gesture."""
+    return [entry.name for entry in TOOLS if entry.draws]
 
 
 def build_tool(name: str, style: ToolStyle) -> Tool:

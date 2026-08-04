@@ -7,9 +7,12 @@ Built to be correct on the setups most hobby screenshot tools break on: **multi-
 DPI** (a 4K 150% panel next to a 1080p 100% panel), negative-coordinate monitor layouts, and
 per-monitor scaling changes while the app is running.
 
-> **Status:** scaffolding. Nothing capturing yet. See [`docs/PLAN.md`](docs/PLAN.md) for the
-> milestone-by-milestone build order and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the
-> layer design.
+> **Status:** v1 complete. All six milestones shipped, 448 tests green, and the packaged
+> `Snipline.exe` builds and runs. See [`docs/PLAN.md`](docs/PLAN.md) for the milestone-by-milestone
+> build order and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the layer design.
+>
+> Multi-monitor mixed-DPI *timing* is still unmeasured — see the caveat under
+> [Measured numbers](#measured-numbers).
 
 ---
 
@@ -41,7 +44,7 @@ is covered by unit tests against synthetic layouts including negative-origin mon
 missing is *timing* on real multi-monitor hardware, not correctness coverage. See
 [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) for the full table and the caveats behind it.
 
-## Planned features (v1)
+## Features
 
 - Global hotkey capture that works while another application has focus
 - Frozen-frame region selection overlay with a pixel-accurate magnifier loupe
@@ -50,6 +53,22 @@ missing is *timing* on real multi-monitor hardware, not correctness coverage. Se
 - Redaction: pixelate and solid fill (see the security note below)
 - Export to clipboard or file (PNG, WebP, JPEG)
 - System tray, single-instance enforcement, configurable hotkey
+
+## Using it
+
+Run `Snipline.exe` (or `snipline` from a dev install). It starts in the system tray with no window —
+that is intentional, a screenshot tool that steals focus at launch is a screenshot tool you cannot
+use to capture the thing you were looking at.
+
+| Action | Key |
+|---|---|
+| Start a capture | **Ctrl+Shift+S** (configurable in tray → Settings) |
+| Cancel the overlay, or close the editor | `Esc` |
+| Undo | `Ctrl+Z` |
+| Redo | `Ctrl+Y` or `Ctrl+Shift+Z` |
+
+Capture → drag a region → annotate → copy to clipboard or save to file. A second launch is refused
+by the single-instance lock and exits silently rather than fighting the first one for the hotkey.
 
 ## Redaction is not blur
 
@@ -78,6 +97,7 @@ Rationale for each choice, including the ones rejected, is recorded in
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt -r requirements-dev.txt
+pip install -e .    # also generates the snipline-* console scripts below
 
 pytest              # headless, no real screen capture
 pyright             # type gate

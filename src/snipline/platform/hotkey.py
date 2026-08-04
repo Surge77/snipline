@@ -17,6 +17,7 @@ expected to show it.
 from __future__ import annotations
 
 import sys
+from typing import Any
 
 from PySide6.QtCore import QAbstractNativeEventFilter, QByteArray, QObject, Signal
 
@@ -27,6 +28,34 @@ __all__ = ["GlobalHotkey", "HotkeyError", "describe_registration_failure"]
 WM_HOTKEY = 0x0312
 ERROR_HOTKEY_ALREADY_REGISTERED = 1409
 DEFAULT_HOTKEY_ID = 1
+
+WINDOWS_MSG_EVENT_TYPE = b"windows_generic_MSG"
+
+# Built once and cached. The filter below runs for every message Qt pumps -- mouse moves,
+# timers, paints -- so defining a ctypes Structure per call would put class creation on a
+# path that executes thousands of times a second. ``wintypes`` is imported lazily because it
+# raises on non-Windows platforms at import time.
+_msg_pointer_type: Any = None
+
+
+def _msg_pointer() -> Any:
+    global _msg_pointer_type
+    if _msg_pointer_type is None:
+        import ctypes
+        from ctypes import wintypes
+
+        class MSG(ctypes.Structure):
+            _fields_ = (
+                ("hwnd", wintypes.HWND),
+                ("message", wintypes.UINT),
+                ("wParam", wintypes.WPARAM),
+                ("lParam", wintypes.LPARAM),
+                ("time", wintypes.DWORD),
+                ("pt", wintypes.POINT),
+            )
+
+        _msg_pointer_type = ctypes.POINTER(MSG)
+    return _msg_pointer_type
 
 
 class HotkeyError(RuntimeError):
@@ -107,25 +136,14 @@ class GlobalHotkey(QObject, QAbstractNativeEventFilter):
         Returns ``(False, 0)`` in every case: the message is observed, never consumed, so
         Qt's own handling of the message queue is left intact.
         """
-        if bytes(eventType.data() if isinstance(eventType, QByteArray) else eventType) != (
-            b"windows_generic_MSG"
-        ):
+        if bytes(
+            eventType.data() if isinstance(eventType, QByteArray) else eventType
+        ) != WINDOWS_MSG_EVENT_TYPE:
             return (False, 0)
 
         import ctypes
-        from ctypes import wintypes
 
-        class MSG(ctypes.Structure):
-            _fields_ = (
-                ("hwnd", wintypes.HWND),
-                ("message", wintypes.UINT),
-                ("wParam", wintypes.WPARAM),
-                ("lParam", wintypes.LPARAM),
-                ("time", wintypes.DWORD),
-                ("pt", wintypes.POINT),
-            )
-
-        msg = ctypes.cast(int(message), ctypes.POINTER(MSG)).contents
+        msg = ctypes.cast(int(message), _msg_pointer()).contents
         if msg.message == WM_HOTKEY and msg.wParam == self._hotkey_id:
             self.triggered.emit()
         return (False, 0)

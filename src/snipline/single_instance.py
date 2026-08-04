@@ -16,6 +16,7 @@ start, which turns one crash into a permanently broken installation.
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import cast
 
 from PySide6.QtCore import QCoreApplication, QElapsedTimer, QObject, Signal
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
@@ -108,7 +109,12 @@ class SingleInstance(QObject):
     def _on_connection(self) -> None:
         if self._server is None:
             return
-        connection = self._server.nextPendingConnection()
+        # Qt's stub declares this non-optional; it returns null when the peer disconnected
+        # between emitting newConnection and this call, and every method on that null
+        # reference aborts the process rather than raising.
+        connection = cast("QLocalSocket | None", self._server.nextPendingConnection())
+        if connection is None:
+            return
 
         # One-shot: deliver() can be reached both from readyRead and from the immediate
         # drain below, and letting it run twice would call deleteLater on an already
@@ -137,11 +143,18 @@ class SingleInstance(QObject):
             deliver()
 
     def close(self) -> None:
-        """Release the lock. Safe to call more than once."""
-        if self._server is not None:
-            self._server.close()
-            self._server.deleteLater()
-            self._server = None
+        """Release the lock. Safe to call more than once.
+
+        Only the holder unlinks the name. A secondary instance doing it would delete the
+        primary's pipe out from under it, and the next launch would then start a second tray
+        icon whose hotkey registration is guaranteed to fail.
+        """
+        if self._server is None:
+            return
+
+        self._server.close()
+        self._server.deleteLater()
+        self._server = None
         QLocalServer.removeServer(self._server_name)
 
 

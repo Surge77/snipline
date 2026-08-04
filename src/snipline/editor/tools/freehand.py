@@ -28,7 +28,14 @@ class FreehandItem(QGraphicsPathItem):
 
     def __init__(self, start: QPointF, style: ToolStyle) -> None:
         super().__init__()
-        self._points = [start]
+        self._last = start
+        self._count = 1
+        self._length = 0.0
+        # Extended by one segment per move rather than rebuilt from the full point list.
+        # Rebuilding replayed every previous segment on every mouse-move event, so a long
+        # stroke got slower the longer it grew -- which is exactly when drawing has to stay
+        # responsive.
+        self._path = QPainterPath(start)
 
         pen = QPen(QColor(style.colour), style.width)
         pen.setCapStyle(pen.capStyle().RoundCap)
@@ -36,33 +43,28 @@ class FreehandItem(QGraphicsPathItem):
         self.setPen(pen)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
-        self._rebuild()
+        self.setPath(self._path)
 
     @property
     def point_count(self) -> int:
-        return len(self._points)
+        return self._count
 
     @property
     def length(self) -> float:
-        return sum(
-            (self._points[i] - self._points[i - 1]).manhattanLength()
-            for i in range(1, len(self._points))
-        )
+        return self._length
 
     def add_point(self, point: QPointF) -> bool:
         """Extend the stroke. False when the point was too close to be worth keeping."""
-        if (point - self._points[-1]).manhattanLength() < MIN_POINT_SPACING_PX:
+        step = (point - self._last).manhattanLength()
+        if step < MIN_POINT_SPACING_PX:
             return False
 
-        self._points.append(point)
-        self._rebuild()
+        self._path.lineTo(point)
+        self._last = point
+        self._count += 1
+        self._length += step
+        self.setPath(self._path)
         return True
-
-    def _rebuild(self) -> None:
-        path = QPainterPath(self._points[0])
-        for point in self._points[1:]:
-            path.lineTo(point)
-        self.setPath(path)
 
 
 class FreehandTool:

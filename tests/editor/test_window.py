@@ -148,3 +148,34 @@ def test_copy_and_export_are_signals_not_direct_calls(qapp: QApplication) -> Non
     window.export_requested.emit()
 
     assert received == ["copy", "export"]
+
+
+def test_the_select_tool_hands_mouse_events_to_the_scene(qapp: QApplication) -> None:
+    # Every annotation is created selectable and movable. Without this branch the view
+    # consumes all three mouse events and those flags are unreachable: a placed item can
+    # never be picked up, and a text item's caret can never be positioned.
+    window = EditorWindow(FakeBackend().grab(CAPTURE))
+
+    window.select_tool("select")
+
+    assert window.view.is_selecting
+
+    window.select_tool("arrow")
+
+    assert not window.view.is_selecting
+
+
+def test_deleting_a_selected_annotation_is_undoable(qapp: QApplication) -> None:
+    window = EditorWindow(FakeBackend().grab(CAPTURE))
+    controller = window.controller
+    controller.press(QPointF(20, 20))
+    controller.move(QPointF(140, 100))
+    item = controller.release(QPointF(140, 100))
+    assert item is not None
+    item.setSelected(True)
+
+    window.delete_selected()
+    assert controller.scene.items() == []
+
+    controller.undo_stack.undo()
+    assert controller.scene.items() == [item]

@@ -11,7 +11,7 @@ about arrows.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRect, QRectF
+from PySide6.QtCore import QPointF, QRect, QRectF, Qt
 from PySide6.QtGui import QImage, QPainter, QPixmap, QUndoStack
 from PySide6.QtWidgets import QGraphicsItem, QGraphicsScene
 
@@ -57,6 +57,11 @@ class AnnotationScene(QGraphicsScene):
             int(self.sceneRect().height()),
             QImage.Format.Format_RGB32,
         )
+        # A fresh QImage holds uninitialised memory. The background covers all of it in the
+        # ordinary case, but any gap -- a rounded scene rect, a failed background draw --
+        # would export whatever was in that memory, which is a privacy problem in a tool
+        # people point at their own screens.
+        image.fill(Qt.GlobalColor.black)
         painter = QPainter(image)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.render(painter, QRectF(image.rect()), self.sceneRect())

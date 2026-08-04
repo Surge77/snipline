@@ -131,3 +131,28 @@ Run on each of the configurations `C1`–`C5` defined in `BENCHMARKS.md`.
       binaries are a common false positive).
 - [ ] `python -m snipline.tools.benchmark` runs on a multi-monitor mixed-DPI machine and the
       results are recorded in `docs/BENCHMARKS.md` against the right configuration ID.
+
+## Overlay chrome and item editing
+
+These cover behaviour that only exists on a real screen. The geometry behind the first three
+is unit tested; what they are checking is that the geometry reaches the display intact.
+
+- [ ] The selection's own bottom row and right column are **not** dimmed — drag a selection
+      over a sharp horizontal edge and confirm the bottom row inside the border matches the
+      captured output rather than the darker surround.
+- [ ] The selection border sits outside the selection: the pixels it is aligned against stay
+      visible while dragging.
+- [ ] Dragging a selection quickly leaves no stale border, band, or size label behind. Drag
+      out, back, and across the screen; the only chrome visible is the current selection's.
+      Repaints are now partial, so anything left over shows up here and nowhere else.
+- [ ] The size label stays legible when the selection is against the top edge, where it flips
+      to sit inside the selection.
+- [ ] Every monitor gets an overlay window on a mixed-DPI desktop. Screens are matched to
+      monitors by nearest origin within a tolerance, so a missing overlay on one panel means
+      the tolerance is wrong, not that the panel is unsupported.
+- [ ] In the editor, the Select tool picks up a placed annotation and moves it; the drawing
+      tools do not.
+- [ ] A redaction moved with the Select tool re-processes the area it now covers, and the
+      area it vacated shows the original capture again (D7).
+- [ ] With the Select tool, clicking into a text annotation positions the caret.
+- [ ] Delete removes the selected annotations and one Ctrl+Z brings them back.

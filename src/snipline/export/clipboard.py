@@ -23,8 +23,14 @@ from snipline.capture.frame import BYTES_PER_PIXEL, Frame
 __all__ = ["copy_to_clipboard", "frame_to_qimage"]
 
 
-def frame_to_qimage(frame: Frame) -> QImage:
-    """Wrap a captured BGRA buffer as an owned, opaque QImage."""
+def frame_to_qimage(frame: Frame, *, copy: bool = True) -> QImage:
+    """Wrap a captured BGRA buffer as an opaque QImage.
+
+    With ``copy=False`` the result is a view over the frame's buffer and is only valid while
+    that frame is alive -- Qt does not keep the Python object referenced and will read freed
+    memory once it goes. Use it when the very next operation copies anyway; on a full desktop
+    grab each avoided copy is tens of megabytes on the hotkey path.
+    """
     if frame.rect.is_empty:
         raise ValueError(f"cannot convert an empty frame: {frame.rect}")
 
@@ -35,8 +41,7 @@ def frame_to_qimage(frame: Frame) -> QImage:
         frame.width * BYTES_PER_PIXEL,
         QImage.Format.Format_RGB32,
     )
-    # copy() detaches from the Python buffer, which Qt does not keep alive.
-    return view.copy()
+    return view.copy() if copy else view
 
 
 def copy_to_clipboard(frame: Frame) -> bool:

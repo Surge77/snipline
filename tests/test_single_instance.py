@@ -146,3 +146,20 @@ def test_run_or_signal_returns_none_and_notifies_the_primary(
         primary.close()
 
     assert received == [CAPTURE_COMMAND]
+
+
+def test_a_refused_instance_does_not_unlink_the_holders_pipe(server_name: str) -> None:
+    # A secondary removing the server name leaves the primary running but unreachable, so
+    # the next launch starts a second tray icon whose hotkey registration cannot succeed.
+    first = SingleInstance(server_name)
+    second = SingleInstance(server_name)
+    try:
+        assert first.try_become_primary()
+        assert not second.try_become_primary()
+
+        second.close()
+
+        assert first.is_primary
+        assert not SingleInstance(server_name).try_become_primary()
+    finally:
+        first.close()
