@@ -65,4 +65,4 @@ branch = true
 [tool.coverage.report]
 # platform/ is Win32 shim code with no meaningful test seam; it is covered by
 # docs/MANUAL_TESTS.md instead. See D9.
-omit = ["src/snipline/platform/hotkey.py", "src/snipline/platform/clipboard_win.py"]
+omit = ["src/snipline/platform/hotkey.py"]

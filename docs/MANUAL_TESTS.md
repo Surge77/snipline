@@ -156,3 +156,35 @@ is unit tested; what they are checking is that the geometry reaches the display 
       area it vacated shows the original capture again (D7).
 - [ ] With the Select tool, clicking into a text annotation positions the caret.
 - [ ] Delete removes the selected annotations and one Ctrl+Z brings them back.
+
+## Appearance and the magnifier
+
+The loupe and the chrome are geometry-tested (`tests/overlay/test_chrome.py`) but only ever
+*look* right on a real screen, and the mixed-DPI cases below cannot be reached on the
+single-display development machine at all.
+
+- [ ] The executable shows the Snipline mark in Explorer, the taskbar, and Alt-Tab — not the
+      generic Python or default-application icon. Check at both small and extra-large icon
+      sizes in Explorer, which read different images out of the `.ico`.
+- [ ] The tray icon is legible against a **light** taskbar as well as a dark one, and is not a
+      filled square.
+- [ ] Editor chrome is dark throughout: no light native spin box, combo drop-down, menu, or
+      tooltip left over from the Windows style. These are what the Fusion style exists to
+      prevent, and a light one means the style was applied too late.
+- [ ] The selected tool is visibly distinct from the unselected ones at a glance, without
+      reading the labels.
+- [ ] Every tool is reachable without a toolbar overflow chevron at the default window size —
+      in particular the redaction row, which is the group that must never be hidden.
+- [ ] The loupe follows the pointer and flips to stay fully on screen at all four edges and all
+      four corners.
+- [ ] Magnified pixels are hard squares, not a smooth blur (D14), and the readout's colour
+      matches the pixel under the crosshair — check against a known flat colour.
+- [ ] The coordinates in the readout are **physical** pixels: on a 150% monitor they must match
+      what `snipline-grab --list` reports, not the logical numbers.
+- [ ] On a mixed-DPI desktop the loupe magnifies the pixels actually under the pointer on
+      *each* monitor. A wrong scale factor here shows up as the loupe drifting further from the
+      pointer the further right it moves.
+- [ ] The hint pill reads in full before the first drag and disappears once dragging starts. It
+      must not be overlapped by the loupe.
+- [ ] No handle, border, or readout covers any part of the selected area — compare the pixels
+      inside the selection against the exported file.
