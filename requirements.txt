@@ -7,7 +7,7 @@ PySide6==6.11.1
 mss==10.2.0
 
 # Image encoding and the pixel operations Qt makes awkward.
-pillow==12.3.0
+pillow==13.0.0
 
 # Zero-copy view over the mss buffer on its way into QImage.
 # Held at 2.4.x: numpy 2.5+ requires Python 3.12, and this project's floor is 3.11.
